@@ -17,10 +17,6 @@ contract accessRegistry {
 
     // event for announcing new partner
     event newPartner(address indexed newPartner);
-
-    // event for removing partner
-    event removedPartner(address indexed partnerAddress);
-
     /**
      * @dev assigning deployers address to owner
      */
