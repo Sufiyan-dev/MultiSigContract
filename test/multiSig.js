@@ -9,10 +9,13 @@ describe("MultiSig",() => {
    async function deployContractFixture() {
       const [addr1, addr2, addr3, addr4, addr5, addr6, addr7] = await ethers.getSigners();
 
-      const contract = await ethers.getContractFactory('multiSig');
-      const multiSig = await contract.deploy([addr2.address,addr3.address]);
+      const contractMulti = await ethers.getContractFactory('multiSig');
+      const multiSig = await contractMulti.deploy([addr2.address,addr3.address]);
 
-      return {multiSig, addr1, addr2, addr3, addr4, addr5, addr6, addr7}
+      const contractErc = await ethers.getContractFactory('GLDToken');
+      const erc20 = await contractErc.deploy(ethers.utils.parseEther("1.0")); // 100 tokens
+
+      return {multiSig, erc20, addr1, addr2, addr3, addr4, addr5, addr6, addr7}
    }
 
    describe("deploy", () => {
@@ -134,7 +137,7 @@ describe("MultiSig",() => {
             await expect(multiSig.submitEthTransaction(ethers.constants.AddressZero, 1000, "0x00"))
             .to.be.revertedWith("invalid address");
           })
-          it("should make succesful transaction", async () => {
+          it("should make succesful eth transaction", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
     
             const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
@@ -143,6 +146,17 @@ describe("MultiSig",() => {
             expect(await multiSig.getTransactionCount()).to.be.equal(1);
             
           });
+          it("should make succesful token transaction", async () => {
+            const { multiSig, erc20, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
+
+            const makeTransaction = await multiSig.connect(addr2).submitTokenTransaction(addr4.address, erc20.address, 10000, "0x00");
+            makeTransaction.wait();
+
+            const balanceOfAdd = await erc20.connect(addr1).balanceOf(addr1.address);
+            // console.log("balance of ", addr1.address, " is ", balanceOfAdd)
+
+            expect(await multiSig.getTransactionCount()).to.be.equal(1);
+          })
           it("should not have any confirmation", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
     
@@ -307,6 +321,19 @@ describe("MultiSig",() => {
          
             await expect(multiSig.executeTransaction(0)).to.be.revertedWith("insufficient eth balance in contract");
          });
+         it("should revert error if contract does'nt have enought token to execute tx", async () => {
+            const { multiSig, erc20, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
+
+            const makeTransaction = await multiSig.connect(addr2).submitTokenTransaction(addr4.address, erc20.address, 1000, "0x00");
+            makeTransaction.wait();
+
+            const confirmTx = await multiSig.confirmTransaction(0);
+            confirmTx.wait();
+
+            expect(await multiSig.calculateConfirmationLeft(0)).to.be.equal(0);
+
+            await expect(multiSig.executeTransaction(0)).to.be.revertedWith("insufficient token balance in contract");
+         })
          it("should only take valid tx id", async () => {
             const { multiSig, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
    
@@ -341,7 +368,7 @@ describe("MultiSig",() => {
             await expect(multiSig.executeTransaction(0)).to.be.revertedWith("did'nt reached the desire confirmation to execute");
    
          })
-         it("should succesfully execute tx when requirement meets", async () => {
+         it("should succesfully execute eth tx when requirement meets", async () => {
             const {multiSig, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
             const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
@@ -359,6 +386,24 @@ describe("MultiSig",() => {
             const executeTx = await multiSig.executeTransaction(0);
             executeTx.wait();
    
+            const checkTxDetails = await multiSig.getTransaction(0);
+            expect(checkTxDetails[3]).to.be.true;
+         })
+         it("should succesfully execute token txn when requirement meets", async () => {
+            const {multiSig, erc20, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
+
+            const makeTransaction = await multiSig.connect(addr2).submitTokenTransaction(addr4.address, erc20.address, 1000, "0x00");
+            makeTransaction.wait();
+
+            const sendToken = await erc20.connect(addr1).transfer(multiSig.address, 1000);
+            sendToken.wait();
+
+            const confirmTx = await multiSig.confirmTransaction(0);
+            confirmTx.wait();
+
+            const executeTx = await multiSig.executeTransaction(0);
+            executeTx.wait();
+
             const checkTxDetails = await multiSig.getTransaction(0);
             expect(checkTxDetails[3]).to.be.true;
          })
@@ -408,6 +453,27 @@ describe("MultiSig",() => {
 
             expect(await multiSig.calculateConfirmationLeft(0)).to.be.not.equal(0);
             expect(await multiSig.calculateConfirmationLeft(0)).to.be.not.equal(3);
+         })
+      })
+      describe("event", () => {
+         it("should emit event when someone confirm transaction", async () => {
+            const {multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
+
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            makeTransaction.wait();
+
+            const confirmTx = await multiSig.confirmTransaction(0);
+            confirmTx.wait();
+
+            const sendETH = await addr5.sendTransaction({
+               to: multiSig.address,
+               value: ethers.utils.parseEther("1.2")
+            });
+            sendETH.wait();
+            
+            expect(await multiSig.executeTransaction(0))
+            .to.emit(multiSig,"ConfirmTransaction")
+            .withArgs(addr1.address, 0);
          })
       })
    })
