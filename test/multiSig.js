@@ -99,7 +99,7 @@ describe("MultiSig",() => {
             const pausePartner = await multiSig.pauseAllPartners();
             pausePartner.wait();
     
-            await expect(multiSig.submitTransaction(addr4.address,1000,"0x00")).to.be.revertedWith("owner has paused the access");
+            await expect(multiSig.submitEthTransaction(addr4.address,1000,"0x00")).to.be.revertedWith("owner has paused the access");
 
             const unpuasePartner = await multiSig.unpauseAllPartners();
             unpuasePartner.wait();
@@ -126,18 +126,18 @@ describe("MultiSig",() => {
          it("should only allow partners to access function", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
     
-            await expect(multiSig.connect(addr4).submitTransaction(addr1.address, 1000, "0x00")).to.be.revertedWith("caller is not an partner !!");
+            await expect(multiSig.connect(addr4).submitEthTransaction(addr1.address, 1000, "0x00")).to.be.revertedWith("caller is not an partner !!");
           });
           it("should revert error if `_to` has invalid address", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
 
-            await expect(multiSig.submitTransaction(ethers.constants.AddressZero, 1000, "0x00"))
+            await expect(multiSig.submitEthTransaction(ethers.constants.AddressZero, 1000, "0x00"))
             .to.be.revertedWith("invalid address");
           })
           it("should make succesful transaction", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
     
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
     
             expect(await multiSig.getTransactionCount()).to.be.equal(1);
@@ -146,7 +146,7 @@ describe("MultiSig",() => {
           it("should not have any confirmation", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
     
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
     
             expect(await multiSig.calculateConfirmationLeft(0)).to.be.equal(1);
@@ -156,8 +156,8 @@ describe("MultiSig",() => {
          it("should emit an event when new transaction get created", async () => {
             const {multiSig, addr1, addr2} = await loadFixture(deployContractFixture);
 
-            await expect(multiSig.submitTransaction(addr2.address, ethers.utils.parseEther("1.0"), "0x00"))
-            .to.emit(multiSig,"SubmitTransaction")
+            await expect(multiSig.submitEthTransaction(addr2.address, ethers.utils.parseEther("1.0"), "0x00"))
+            .to.emit(multiSig,"SubmitEthTransaction")
             .withArgs(addr1.address, 0, addr2.address, ethers.utils.parseEther("1.0"), "0x00");
          })
       })
@@ -167,7 +167,7 @@ describe("MultiSig",() => {
          it("should only allow patners to confirm the transaction", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} =await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             await expect(multiSig.connect(addr4).confirmTransaction(0)).to.be.revertedWith("caller is not an partner !!");
@@ -180,7 +180,7 @@ describe("MultiSig",() => {
          it("should only allow to confirm tx when it's not executed", async () => {
             const {multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -190,7 +190,7 @@ describe("MultiSig",() => {
    
             const sendETH = await addr5.sendTransaction({
                to: multiSig.address,
-               value: ethers.utils.parseEther("1.0")
+               value: ethers.utils.parseEther("2.0")
             });
             sendETH.wait();
    
@@ -202,7 +202,7 @@ describe("MultiSig",() => {
          it("should only allow one confirmaation per partner", async () => {
             const {multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -215,7 +215,7 @@ describe("MultiSig",() => {
          it("should emit event when partern confirm/validate transaction", async () => {
             const {multiSig, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
 
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
 
             await expect(multiSig.confirmTransaction(0))
@@ -229,7 +229,7 @@ describe("MultiSig",() => {
          it("should only allow partners to access the function", async () => {
             const { multiSig, addr2, addr4} = await loadFixture(deployContractFixture);
 
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
 
             expect(multiSig.revokeConfirmation(0)).to.be.revertedWith("caller is not an partner !!")
@@ -242,7 +242,7 @@ describe("MultiSig",() => {
          it("should only allow to revoke when user/partner have confirm it", async () => {
             const { multiSig, addr1, addr2, addr3, addr4} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             await expect(multiSig.revokeConfirmation(0)).to.be.revertedWith("tx not confirmed by caller");
@@ -250,7 +250,7 @@ describe("MultiSig",() => {
          it("should only revoke tx when its not executed yet", async () => {
             const {multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
             
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -258,7 +258,7 @@ describe("MultiSig",() => {
    
             const sendETH = await addr5.sendTransaction({
                to: multiSig.address,
-               value: ethers.utils.parseEther("1.0")
+               value: ethers.utils.parseEther("1.5")
             });
             sendETH.wait();
    
@@ -280,7 +280,7 @@ describe("MultiSig",() => {
          it("should emit event someone.partner revoke transaction", async () => {
             const {multiSig, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
 
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
             
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -297,7 +297,7 @@ describe("MultiSig",() => {
          it("should revert error if contract does'nt have enought eth to execute tx", async () => {
             const { multiSig, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
             
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
          
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -305,7 +305,7 @@ describe("MultiSig",() => {
          
             expect(await multiSig.calculateConfirmationLeft(0)).to.be.equal(0);
          
-            await expect(multiSig.executeTransaction(0)).to.be.revertedWith("insufficient balance in contract");
+            await expect(multiSig.executeTransaction(0)).to.be.revertedWith("insufficient eth balance in contract");
          });
          it("should only take valid tx id", async () => {
             const { multiSig, addr1, addr2, addr4} = await loadFixture(deployContractFixture);
@@ -315,7 +315,7 @@ describe("MultiSig",() => {
          it("should only execute tx when its not already executed", async () => {
             const { multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
             
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -323,7 +323,7 @@ describe("MultiSig",() => {
    
             const sendETH = await addr5.sendTransaction({
                to: multiSig.address,
-               value: ethers.utils.parseEther("1.0")
+               value: ethers.utils.parseEther("1.5")
             });
             sendETH.wait();
    
@@ -335,7 +335,7 @@ describe("MultiSig",() => {
          it("should only execute tx when desired amount of partners have confirme it", async () => {
             const {multiSig, addr2, addr4} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             await expect(multiSig.executeTransaction(0)).to.be.revertedWith("did'nt reached the desire confirmation to execute");
@@ -344,7 +344,7 @@ describe("MultiSig",() => {
          it("should succesfully execute tx when requirement meets", async () => {
             const {multiSig, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
    
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -352,7 +352,7 @@ describe("MultiSig",() => {
    
             const sendETH = await addr5.sendTransaction({
                to: multiSig.address,
-               value: ethers.utils.parseEther("1.0")
+               value: ethers.utils.parseEther("1.1")
             });
             sendETH.wait();
    
@@ -367,7 +367,7 @@ describe("MultiSig",() => {
          it("should emit event when transaction get executed", async () => {
             const {multiSig, addr1, addr2, addr4, addr5} = await loadFixture(deployContractFixture);
 
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr4.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
    
             const confirmTx = await multiSig.confirmTransaction(0);
@@ -375,7 +375,7 @@ describe("MultiSig",() => {
    
             const sendETH = await addr5.sendTransaction({
                to: multiSig.address,
-               value: ethers.utils.parseEther("1.0")
+               value: ethers.utils.parseEther("1.2")
             });
             sendETH.wait();
 
@@ -399,7 +399,7 @@ describe("MultiSig",() => {
             const addpartner6 = await multiSig.addNewPartner(addr6.address);
             addpartner6.wait();
 
-            const makeTransaction = await multiSig.connect(addr2).submitTransaction(addr7.address, ethers.utils.parseEther("1.0"), "0x00");
+            const makeTransaction = await multiSig.connect(addr2).submitEthTransaction(addr7.address, ethers.utils.parseEther("1.0"), "0x00");
             makeTransaction.wait();
 
             // 1

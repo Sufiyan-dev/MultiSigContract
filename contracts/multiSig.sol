@@ -2,11 +2,27 @@ pragma solidity ^0.8.0; // SPDX-License-Identifier: UNLICENSED
 import 'hardhat/console.sol';
 import './accessRegistry.sol';
 
+
+interface IERC20 {
+    function allowance(address owner, address spender) external view returns (uint256);
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
+}
+
+
 contract multiSig is accessRegistry{
 
     event Deposit (address indexed sender, uint amount, uint Contractbalance);
-    event SubmitTransaction(
+    event SubmitEthTransaction(
         address indexed owner,
+        uint indexed txIndex,
+        address indexed to,
+        uint value,
+        bytes data
+    );
+    event SubmitTokenTransaction(
+        address indexed owner,
+        address tokenAddress,
         uint indexed txIndex,
         address indexed to,
         uint value,
@@ -20,6 +36,7 @@ contract multiSig is accessRegistry{
 
     struct Transaction {
         address payable to;
+        address tokenAddress;
         uint value;
         bytes data;
         bool executed;
@@ -48,7 +65,7 @@ contract multiSig is accessRegistry{
 
     constructor(address[] memory newPartners) {
         
-        require(newPartners.length > 0,"owner required");
+        require(newPartners.length > 0,"partners required");
         
         for(uint i = 0; i < newPartners.length; i++){
             
@@ -65,22 +82,32 @@ contract multiSig is accessRegistry{
              
         }
     }
-
-    receive() external payable {
+    /**
+     * To receive eth directly into contract
+     */
+    receive() external payable { 
         emit Deposit(msg.sender, msg.value, address(this).balance);
     }
 
-    function submitTransaction(
+    /**
+     * 
+     * @param _to Send to address
+     * @param _value Value in Eth
+     * @param _data Any data
+     */
+    function submitEthTransaction(
         address payable _to,
         uint _value,
         bytes memory _data
     ) public onlyPartners hasNotPaused {
         require(_to != address(0),"invalid address");
+        // require(_value < address(this).balance,"insufficient funds");
         uint txIndex = transactions.length;
 
         transactions.push(
             Transaction({
                 to: _to,
+                tokenAddress: address(0),
                 value: _value,
                 data: _data,
                 executed: false,
@@ -88,7 +115,40 @@ contract multiSig is accessRegistry{
             })
         );
 
-        emit SubmitTransaction(msg.sender, txIndex, _to, _value, _data);
+        emit SubmitEthTransaction(msg.sender, txIndex, _to, _value, _data);
+    }
+
+    /**
+     * 
+     * @param _to Send to
+     * @param _tokenAddress token address of which we need to send
+     * @param _value Value of token
+     * @param _data any data 
+     */
+    function submitTokenTransaction(
+        address payable _to,
+        address _tokenAddress,
+        uint _value,
+        bytes memory _data
+    ) public onlyPartners hasNotPaused {
+        require(_to != address(0),"invalid address");
+        // require(_value < IERC20(_tokenAddress).allowance(msg.sender,address(this)),"insufficient funds");
+
+        uint txIndex = transactions.length;
+
+        transactions.push(
+            Transaction({
+                to: _to,
+                tokenAddress: _tokenAddress,
+                value: _value,
+                data: _data,
+                executed: false,
+                numConfirmations: 0
+            })
+        );
+
+        emit SubmitTokenTransaction(msg.sender, _tokenAddress, txIndex, _to, _value, _data);
+
     }
 
     function confirmTransaction(uint _txIndex)
@@ -113,9 +173,9 @@ contract multiSig is accessRegistry{
         txExists(_txIndex)
         notExecuted(_txIndex)
     {
-        Transaction storage transaction = transactions[_txIndex];
-
         require(isConfirmed[_txIndex][msg.sender], "tx not confirmed by caller");
+        
+        Transaction storage transaction = transactions[_txIndex];
 
         transaction.numConfirmations -= 1;
         isConfirmed[_txIndex][msg.sender] = false;
@@ -123,9 +183,7 @@ contract multiSig is accessRegistry{
         emit RevokeConfirmation(msg.sender, _txIndex);
     }
 
-    /**
-     * @dev to execute transaction 
-     */
+    
     function executeTransaction(uint _txIndex)
         public
         onlyPartners
@@ -139,12 +197,21 @@ contract multiSig is accessRegistry{
             calculateConfirmationLeft(_txIndex) == 0,
             "did'nt reached the desire confirmation to execute"
         );
-        require(address(this).balance >= transaction.value,"insufficient balance in contract");
+        if(transaction.tokenAddress == address(0)){ // which means its an ETH txn
+            require(address(this).balance > transaction.value,"insufficient eth balance in contract");
+
+            (bool success, ) = transaction.to.call{value: transaction.value}(transaction.data);
+            require(success, "tx failed");
+
+        } else {
+            require(IERC20(transaction.tokenAddress).balanceOf(address(this)) >= transaction.value,"insufficient token balance in contract");
+
+            (bool txn) = IERC20(transaction.tokenAddress).transfer(transaction.to,transaction.value);
+            require(txn, "Transfer failed");
+        }
 
         transaction.executed = true;
 
-        (bool success, ) = transaction.to.call{value: transaction.value}(transaction.data);
-        require(success, "tx failed");
 
         emit ExecuteTransaction(msg.sender, _txIndex);
     }
